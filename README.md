@@ -1,15 +1,26 @@
 Tiny Arch
 ---------
 
-Tiny Arch generates a 10M bootable iso to run pacman from initramfs.
+Tiny Arch generates a 10M bootable iso with pacman. The iso generated is
+minimal, just some drivers, busybox commands and pacman.
 
-The system generate by Tiny Arch is minimal, it is configured to have the bare
-minimum drivers and mostly busybox commands.
+# How to use
 
-# Use
+Install the package:
 
-Just run `tinyarch container` and it will create the iso for you, to run the
-iso using qemu use the following command:
+```sh
+mkdir -p /var/abs/local
+cd /var/abs/local
+wget https://github.com/hackaugusto/tinyarch/archive/master.zip -O tinyarch.zip
+unzip tinyarch.zip -d tinyarch
+rm tinyarch.zip
+cd tinyarch
+makepkg
+# [sudo] pacman -U tinyarch-1-1-x86_64.pkg.tar.xz
+```
+
+After installed run `tinyarch container` to create the iso. To use the image
+with qemu run:
 
 ```sh
 qemu-system-x86_64 -device virtio-net,netdev=network0 -netdev user,id=network0 -boot order=d -cdrom tinyarch.iso
@@ -17,11 +28,12 @@ qemu-system-x86_64 -device virtio-net,netdev=network0 -netdev user,id=network0 -
 
 # Configuration
 
-To add new files, binaries or modules into the iso you need to:
+To add new files, binaries or modules into the iso:
 
-- Install the aditional package with `tinyarch container {packages}`.
-- Change `FILES` parameter in the Tiny Arch mkinitcpio configuration to copy
-  the files.
+- Inform additional packages to install in the container in the command line
+  `tinyarch container {packages}`.
+- Change `FILES` parameter in the `/etc/mkinitcpio-tinyarch.conf` to copy the
+  files into the initramfs.
 - Modules can be added with the `MODULES` parameter.
 
 # How it works

@@ -32,9 +32,6 @@ CONTAINER_PACKAGES=(
     'syslinux'                  # boot loader
     'tar'
     'util-linux'                # we need setsid
-    # 'wget'
-    # 'dnsutils'
-    # 'openssl'                   # required by dig utility from dnsutils 
 
     # Required by the container to generate the iso + initramfs
     'binutils'          # mkinitcpio strip hook needes file
@@ -44,32 +41,7 @@ CONTAINER_PACKAGES=(
     'xorriso'           # creates the el torito iso
     'zsh'               # this script runs only on zsh
     'file'              # mkinitcpio strip hook needes file
-
-    # 'device-mapper'
-    # 'mdadm'
-    # 'pciutils'
-    # 'pcmciautils'
-    # 'reiserfsprogs'
-    # 'sysfsutils'
-    # 'usbutils'
-    # 'inetutils'
-    # 'iputils'
-    # 'jfsutils'
-    # 'cryptsetup'
-    # 'lvm2'
-    # 'xfsprogs'
-    
-    # Optionals:
-    # 'bash'
-    # 'perl'
-    # 'curl'
-    # 'diffutils'
-    # 'grep'
-    # 'sed'
-    # 'util-linux'
     # 'virtualbox-guest-modules'
-    # 'wget'
-    # 'gawk'
 )
 
 msg() {
@@ -93,7 +65,7 @@ die() {
 }
 
 usage() {
-    die "$0 [container|iso]"
+    die "$0 [container|iso] {additional packages to install in the container}"
 }
 
 container() {
