@@ -12,9 +12,9 @@ Install the package:
 mkdir -p /var/abs/local
 cd /var/abs/local
 wget https://github.com/hackaugusto/tinyarch/archive/master.zip -O tinyarch.zip
-unzip tinyarch.zip -d tinyarch
+unzip tinyarch.zip
 rm tinyarch.zip
-cd tinyarch
+cd tinyarch-master
 makepkg
 # [sudo] pacman -U tinyarch-1-1-x86_64.pkg.tar.xz
 ```
