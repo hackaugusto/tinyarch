@@ -1,0 +1,91 @@
+#!/bin/bash
+
+build() {
+    local applet
+    local bin
+    local filter
+
+    # init
+    add_file '/usr/lib/initcpio/init_functions' '/init_functions'
+    add_file '/usr/share/tinyarch/init' '/init' '755'
+
+    add_binary 'kmod'
+    add_binary 'modprobe'
+    add_binary 'mount'
+    add_binary 'setsid'
+
+    add_module 'loop'
+
+    # needed by the udevadm hook
+    add_file '/usr/lib/systemd/systemd-udevd'
+    add_file '/usr/lib/modprobe.d/usb-load-ehci-first.conf'
+
+    add_binary 'systemd-tmpfiles'
+
+    # pacman
+    mkdir -m 0755 -p "$BUILDROOT"/var/{cache/pacman/pkg,lib/pacman,log} "$newroot"/{dev,run,etc}
+
+    add_file '/etc/pacman.conf'
+    add_file '/etc/pacman.d/mirrorlist'
+
+    add_binary 'arch-chroot'
+    add_binary 'genfstab'
+    add_binary 'pacman'
+    add_binary 'pacstrap'
+
+    # network
+    install -dm755 "$BUILDROOT"/var/lib/dhcpcd
+    add_full_dir '/usr/lib/dhcpcd'
+
+    add_file '/etc/host.conf'
+    add_file '/etc/nsswitch.conf'
+    cat >"$BUILDROOT"/etc/hosts <<EOF 
+127.0.0.1   localhost
+::1	        localhost
+EOF
+    # dns
+    add_symlink /usr/lib/libnss_files.so.2 $(readlink /usr/lib/libnss_files.so.2)
+    add_binary $(readlink -f /usr/lib/libnss_files.so.2)
+    add_symlink /usr/lib/libnss_dns.so.2 $(readlink /usr/lib/libnss_dns.so.2)
+    add_binary $(readlink -f /usr/lib/libnss_dns.so.2)
+
+    # vi, sed, grep and a bit more
+    add_binary /usr/lib/initcpio/busybox /bin/busybox
+    for applet in $(/usr/lib/initcpio/busybox --list); do
+        add_symlink "/usr/bin/$applet" busybox
+    done
+
+    # utils
+    # add_binary 'dig'
+    # add_binary '/usr/lib/engines/libgost.so'
+    # add_binary 'wget'
+
+    #for bin in $(pacman -Ql dbus systemd | grep -P '/bin/' | grep -Pv 'dbus-launch' | cut -d' ' -f2); do
+    #    [ -f "$bin" ] && [ -x "$bin" ] && add_binary ${bin##*/}
+    #done
+    #for file in $(pacman -Ql systemd dbus | grep -Pv 'bin|include|share' | cut -d' ' -f2); do
+    #    [ -f "$file" ] && add_file ${file}
+    #done
+
+    #add_binary kmod
+    #for applet in {dep,ins,rm,ls}mod mod{probe,info}; do
+    #    add_symlink "/usr/bin/$applet" kmod
+    #done
+
+    # pata, sata, scsi
+    #local -A blockdevs
+    #for filter in 'scsi/.*ata' '/(block|scsi|fusion)/' 'ata/[ps]ata_' \
+    #        'ata/(ahci|pdc_adma|ata_piix|ata_generic)'; do
+    #    add_checked_modules "$filter" && blockdevs['sd_mod']=1
+    #done
+    #map add_module "${!blockdevs[@]}"
+}
+
+help() {
+    cat <<HELPEOF
+This hook replaces the base hook and provides the minimum binaries that are
+necessary to boot into the initramfs.
+HELPEOF
+}
+
+# vim: set ft=sh ts=4 sw=4 et:

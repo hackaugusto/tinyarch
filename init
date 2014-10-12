@@ -1,0 +1,27 @@
+#!/usr/bin/ash
+
+. /init_functions
+. /config
+
+mount -t proc proc /proc -o nosuid,noexec,nodev
+mount -t sysfs sys /sys -o nosuid,noexec,nodev
+mount -t devtmpfs dev /dev -o mode=0755,nosuid
+mount -t tmpfs run /run -o nosuid,nodev,mode=0755
+mkdir -m755 /run/initramfs
+
+run_hookfunctions 'run_earlyhook' 'early hook' $EARLYHOOKS
+
+if [ -n "$earlymodules$MODULES" ]; then
+    modprobe -qab ${earlymodules//,/ } $MODULES
+fi
+
+run_hookfunctions 'run_hook' 'hook' $HOOKS
+run_hookfunctions 'run_latehook' 'late hook' $LATEHOOKS
+run_hookfunctions 'run_cleanuphook' 'cleanup hook' $CLEANUPHOOKS
+
+# using a subshell so that ^D doesnt result in a segfault
+# (PS1='[tinyarch] \$ ' exec env -i /sbin/sh)
+(exec setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1')
+/sbin/poweroff -n -f
+
+# vim: set ft=sh ts=4 sw=4 et:

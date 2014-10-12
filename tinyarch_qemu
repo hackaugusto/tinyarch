@@ -1,0 +1,23 @@
+#!/bin/bash
+
+build() {
+    local -A blockdevs
+
+    # keyboard
+    add_module 'atkbd'
+
+    # virtio
+    if add_checked_modules 'virtio'; then
+        blockdevs['virtio_blk?']=1
+    fi
+
+    map add_module "${!blockdevs[@]}"
+}
+
+help() {
+    cat <<HELPEOF
+Installs the drivers needed by udev
+HELPEOF
+}
+
+# vim: set ft=sh ts=4 sw=4 et:

@@ -1,0 +1,8 @@
+#!/bin/sh
+
+export PATH=/sbin:/bin:/usr/sbin:/usr/bin
+umask 022
+
+trap ":" INT QUIT TSTP
+
+/bin/sh

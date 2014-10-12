@@ -1,0 +1,272 @@
+#!/usr/bin/zsh
+
+setopt ERR_EXIT
+
+_MOUNTS=()
+
+PKGIGNORE=(
+    'jfsutils'
+    'lvm2'
+    'cryptsetup'
+    'groff'
+    'man-db'
+    'man-pages'
+    'mdadm'
+    'pciutils'
+    'pcmciautils'
+    'reiserfsprogs'
+    's-nail'
+    'xfsprogs'
+)
+
+CONTAINER_PACKAGES=(
+    # Required for the initramfs
+    'arch-install-scripts'      # pacstrap
+    'bzip2'
+    'dhcpcd'
+    'findutils'
+    'gzip'
+    'linux'
+    'pacman'
+    'python2'
+    'syslinux'                  # boot loader
+    'tar'
+    'util-linux'                # we need setsid
+    # 'wget'
+    # 'dnsutils'
+    # 'openssl'                   # required by dig utility from dnsutils 
+
+    # Required by the container to generate the iso + initramfs
+    'binutils'          # mkinitcpio strip hook needes file
+    'coreutils'         # basic tools
+    'systemd'           # init system for the container
+    'filesystem'        # base file system
+    'xorriso'           # creates the el torito iso
+    'zsh'               # this script runs only on zsh
+    'file'              # mkinitcpio strip hook needes file
+
+    # 'device-mapper'
+    # 'mdadm'
+    # 'pciutils'
+    # 'pcmciautils'
+    # 'reiserfsprogs'
+    # 'sysfsutils'
+    # 'usbutils'
+    # 'inetutils'
+    # 'iputils'
+    # 'jfsutils'
+    # 'cryptsetup'
+    # 'lvm2'
+    # 'xfsprogs'
+    
+    # Optionals:
+    # 'bash'
+    # 'perl'
+    # 'curl'
+    # 'diffutils'
+    # 'grep'
+    # 'sed'
+    # 'util-linux'
+    # 'virtualbox-guest-modules'
+    # 'wget'
+    # 'gawk'
+)
+
+msg() {
+    # bold and green
+    printf "$(tput bold)$(tput setaf 2) $1$(tput sgr0)\n" >&1
+}
+
+info() {
+    # bold and blue
+    printf "$(tput bold)$(tput setaf 4) -> $1$(tput sgr0)\n" >&1
+}
+
+error () {
+    # bold and red
+    printf "$(tput bold)$(tput setaf 1) ERROR: $1$(tput sgr0)\n" >&1
+}
+
+die() {
+    error "$@"
+    exit 1
+}
+
+usage() {
+    die "$0 [container|iso]"
+}
+
+container() {
+    # creates the container that will generate the image
+    msg "Setting up the container"
+
+    info "filesystem directories and mount points"
+    filesystem
+    mountpoints
+
+    packages="${@[*]}"
+    info "pacman [installing ${#@}: $packages]"
+    packages $@
+    info "pacman done"
+}
+
+build() {
+    # workhorse, this will generate the image
+    msg "Starting the build"
+
+    info "filesystem directories"
+    filesystem
+
+    info "installing the kernel"
+    kernel
+
+    info "installing syslinux bootloader"
+    bootloader
+
+    info "generating the iso"
+    image
+}
+
+_mount() {
+    # Utility for keeping track of mounted filesystems
+    [ ! -z ${_MOUNTS[(r)$2]} ] && return
+    mount "$@"
+    _MOUNTS=("$2" "${_MOUNTS[@]}")
+}
+
+_umount() {
+    # Utility to automatically umount filesystem
+    [ -z "$_MOUNTS[*]" ] && return 
+    umount "${_MOUNTS[@]}"
+    _MOUNTS=()
+}
+
+cleanup() {
+    msg "Cleaning up"
+    _umount 
+    rm -rf "${WORKDIR}"
+}
+
+filesystem() {
+    mkdir -m 0755 -p "${WORKDIR}"/var/{cache/pacman/pkg,lib/pacman,log} "${WORKDIR}"/{dev,run,etc,boot,mnt,media,home}
+    mkdir -m 1777 -p "${WORKDIR}"/tmp
+    mkdir -m 0555 -p "${WORKDIR}"/{sys,proc}
+}
+
+mountpoints() {
+    _mount proc "${WORKDIR}/proc" -t proc -o nosuid,noexec,nodev
+    _mount sys "${WORKDIR}/sys" -t sysfs -o nosuid,noexec,nodev,ro 
+    _mount udev "${WORKDIR}/dev" -t devtmpfs -o mode=0755,nosuid
+    _mount devpts "${WORKDIR}/dev/pts" -t devpts -o mode=0620,gid=5,nosuid,noexec
+    _mount shm "${WORKDIR}/dev/shm" -t tmpfs -o mode=1777,nosuid,nodev
+    _mount run "${WORKDIR}/run" -t tmpfs -o nosuid,nodev,mode=0755
+    _mount tmp "${WORKDIR}/tmp" -t tmpfs -o mode=1777,strictatime,nodev,nosuid
+}
+
+packages() {
+    local pkgignore
+    packages=$@
+    pkgignore=${PKGIGNORE:|packages}
+
+    (pacman --root "${WORKDIR}" --noconfirm --noprogressbar -Sy $@ --ignore $pkgignore || die "pacman failed" ) |& \
+        grep -E '^(checking|loading|installing|warning: skip)' 
+
+    files=(
+        /etc/mkinitcpio-tinyarch.conf
+        /usr/share/tinyarch/tinyarch.cfg
+        /usr/share/tinyarch/init
+        /usr/lib/initcpio/install/tinyarch
+        /usr/lib/initcpio/install/tinyarch_qemu
+    )
+    for file in $files; do
+        [ ! -f "${WORKDIR}/$file" ] && install -D -m644 $file "${WORKDIR}/$file"
+    done
+
+    if [[ ! -f "${WORKDIR}/usr/bin/tinyarch" ]]; then
+        install -D -m755 /usr/bin/tinyarch "${WORKDIR}/usr/bin/tinyarch"
+    fi
+
+    if [[ -d /etc/pacman.d/gnupg && ! -d "${WORKDIR}/etc/pacman.d/gnupg" ]]; then
+        cp -r /etc/pacman.d/gnupg "${WORKDIR}/etc/pacman.d/"
+    fi
+
+    if [[ -d /etc/pacman.d/mirrorlist && ! -d "${WORKDIR}/etc/pacman.d/mirrorlist" ]]; then
+        cp -r /etc/pacman.d/mirrorlist "${WORKDIR}/etc/pacman.d/"
+    fi
+}
+
+kernel(){
+    install -m644 /boot/vmlinuz-linux "${BOOT}"/vmlinuz-linux
+    mkinitcpio -c /etc/mkinitcpio-tinyarch.conf -k $(uname -r) -g "${BOOT}"/initrd.img
+}
+
+bootloader() {
+    install -D -m644 /usr/share/tinyarch/tinyarch.cfg "${SYSLINUX}"/syslinux.cfg
+
+    files=(
+        /usr/lib/syslinux/bios/isolinux.bin
+        /usr/lib/syslinux/bios/ldlinux.c32
+        /usr/lib/syslinux/bios/boot.cat             # TODO: mkisofs creates the catalog with the flag `-c` does xorriso have a equivalent?
+    )
+
+    for file in $files; do
+        [ -f $file ] && install -D -m644 $file "${SYSLINUX}"/$(basename $file)
+    done
+}
+
+image() {
+    xorriso                                                 \
+        -as mkisofs                                         \
+        -iso-level 3                                        \
+        -joliet                                             \
+        -rock                                               \
+        -max-iso9660-filenames                              \
+        -relaxed-filenames                                  \
+        -allow-leading-dots                                 \
+        -allow-lowercase                                    \
+        -allow-multidot                                     \
+        -boot-info-table                                    \
+        -boot-load-size 4                                   \
+        -eltorito-boot boot/syslinux/isolinux.bin           \
+        -eltorito-catalog boot/syslinux/boot.cat            \
+        -isohybrid-mbr /usr/lib/syslinux/bios/isohdpfx.bin  \
+        -no-emul-boot                                       \
+        -omit-period                                        \
+        -omit-version-number                                \
+        -preparer "prepared by tinyarch"                    \
+        --sort-weight 1 boot/syslinux/isolinux.bin          \
+        -volid "TINYARCH"                                   \
+        -output "tinyarch.iso"                              \
+        "${WORKDIR}/" &> /dev/null
+}
+
+(( $# )) || usage
+
+trap 'cleanup' EXIT
+
+if [ $1 = 'container' ]; then
+    WORKDIR=$(mktemp -d --suffix 'tinyarch.container')
+    BOOT="$WORKDIR/boot"
+    SYSLINUX="$BOOT/syslinux"
+
+    # install packages and config files
+    all_packages=($CONTAINER_PACKAGES ${@:2})
+    container $all_packages
+
+    # unmount filesystems (seems to annoy systemd-nspawn)
+    _umount
+
+    # run the iso builder inside the container
+    systemd-nspawn -D "$WORKDIR" /usr/bin/tinyarch iso
+
+    # copy the iso before the workdir is deleted
+    cp "${WORKDIR}"/tinyarch.iso ./tinyarch.iso
+elif [ $1 = 'iso' ]; then
+    WORKDIR=$(mktemp -d --suffix 'tinyarch.iso')
+    BOOT="$WORKDIR/boot"
+    SYSLINUX="$BOOT/syslinux"
+
+    build
+else
+    usage
+fi
