@@ -108,14 +108,14 @@ _mount() {
 
 _umount() {
     # Utility to automatically umount filesystem
-    [ -z "$_MOUNTS[*]" ] && return 
+    [ -z "$_MOUNTS[*]" ] && return
     umount "${_MOUNTS[@]}"
     _MOUNTS=()
 }
 
 cleanup() {
     msg "Cleaning up"
-    _umount 
+    _umount
     rm -rf "${WORKDIR}"
 }
 
@@ -127,7 +127,7 @@ filesystem() {
 
 mountpoints() {
     _mount proc "${WORKDIR}/proc" -t proc -o nosuid,noexec,nodev
-    _mount sys "${WORKDIR}/sys" -t sysfs -o nosuid,noexec,nodev,ro 
+    _mount sys "${WORKDIR}/sys" -t sysfs -o nosuid,noexec,nodev,ro
     _mount udev "${WORKDIR}/dev" -t devtmpfs -o mode=0755,nosuid
     _mount devpts "${WORKDIR}/dev/pts" -t devpts -o mode=0620,gid=5,nosuid,noexec
     _mount shm "${WORKDIR}/dev/shm" -t tmpfs -o mode=1777,nosuid,nodev
@@ -136,12 +136,15 @@ mountpoints() {
 }
 
 packages() {
-    local pkgignore
+    local pkgignore files file packages ignore
     packages=$@
-    pkgignore=${PKGIGNORE:|packages}
 
-    (pacman --root "${WORKDIR}" --noconfirm --noprogressbar -Sy $@ --ignore $pkgignore || die "pacman failed" ) |& \
-        grep -E '^(checking|loading|installing|warning: skip)' 
+    for ignore in ${PKGIGNORE:|packages}; do
+        pkgignore=("${pkgignore[@]}" "--ignore" ${ignore})
+    done
+
+    (pacman --root "${WORKDIR}" --noconfirm --noprogressbar -Sy $@ $pkgignore || die "pacman failed" ) |& \
+        grep -E '^(checking|loading|installing|warning: skip)'
 
     files=(
         /etc/mkinitcpio-tinyarch.conf
